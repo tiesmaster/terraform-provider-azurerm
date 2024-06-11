@@ -199,6 +199,7 @@ func SupportedTypedServices() []sdk.TypedServiceRegistration {
 		nginx.Registration{},
 		paloalto.Registration{},
 		policy.Registration{},
+		postgres.Registration{},
 		privatednsresolver.Registration{},
 		recoveryservices.Registration{},
 		redis.Registration{},
