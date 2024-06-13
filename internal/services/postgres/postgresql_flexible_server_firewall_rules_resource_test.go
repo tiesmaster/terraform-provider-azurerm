@@ -80,22 +80,22 @@ func (PostgresqlFlexibleServerFirewallRulesResource) basic(data acceptance.TestD
 
 resource "azurerm_postgresql_flexible_server_firewall_rules" "test" {
   server_id = azurerm_postgresql_flexible_server.test.id
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR-%[2]d"
     start_ip_address = "120.0.0.0"
     end_ip_address   = "120.0.0.0"
   }
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR2-%[2]d"
     start_ip_address = "121.0.0.0"
     end_ip_address   = "121.0.0.0"
   }
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR3-%[2]d"
     start_ip_address = "122.0.0.0"
     end_ip_address   = "122.0.0.0"
   }
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR4-%[2]d"
     start_ip_address = "123.0.0.0"
     end_ip_address   = "123.0.0.0"
@@ -110,17 +110,17 @@ func (r PostgresqlFlexibleServerFirewallRulesResource) update(data acceptance.Te
 
 resource "azurerm_postgresql_flexible_server_firewall_rules" "test" {
   server_id = azurerm_postgresql_flexible_server.test.id
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR-%[2]d"
     start_ip_address = "124.0.0.0"
     end_ip_address   = "124.0.0.254"
   }
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR2-%[2]d"
     start_ip_address = "125.0.0.0"
     end_ip_address   = "125.0.0.254"
   }
-  firewall_rule {
+  rule {
     name             = "acctest-FSFR5-%[2]d"
     start_ip_address = "11.0.0.0"
     end_ip_address   = "11.1.0.254"
