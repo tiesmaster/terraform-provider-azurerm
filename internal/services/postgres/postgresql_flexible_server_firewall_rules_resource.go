@@ -224,7 +224,7 @@ func (r FlexibleServerFirewallRulesResource) Update() sdk.ResourceFunc {
 			locks.ByName(id.FlexibleServerName, postgresqlFlexibleServerResourceName)
 			defer locks.UnlockByName(id.FlexibleServerName, postgresqlFlexibleServerResourceName)
 
-			if metadata.ResourceData.HasChange("firewall_rule") {
+			if metadata.ResourceData.HasChange("rule") {
 				listFirewallRulesResult, err := client.ListByServerComplete(ctx, *id)
 				if err != nil {
 					return err
