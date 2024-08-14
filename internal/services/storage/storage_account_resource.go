@@ -2033,31 +2033,33 @@ func resourceStorageAccountUpdate(d *pluginsdk.ResourceData, meta interface{}) e
 		}
 	}
 
-	if d.HasChange("queue_properties") {
-		if !supportLevel.supportQueue {
-			return fmt.Errorf("`queue_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
-		}
+	if !features.FourPointOhBeta() {
+		if d.HasChange("queue_properties") {
+			if !supportLevel.supportQueue {
+				return fmt.Errorf("`queue_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
+			}
 
-		account, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
-		if err != nil {
-			return fmt.Errorf("retrieving %s: %+v", *id, err)
-		}
-		if account == nil {
-			return fmt.Errorf("unable to locate %s", *id)
-		}
+			account, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
+			if err != nil {
+				return fmt.Errorf("retrieving %s: %+v", *id, err)
+			}
+			if account == nil {
+				return fmt.Errorf("unable to locate %s", *id)
+			}
 
-		queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
-		if err != nil {
-			return fmt.Errorf("building Queues Client: %s", err)
-		}
+			queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
+			if err != nil {
+				return fmt.Errorf("building Queues Client: %s", err)
+			}
 
-		queueProperties, err := expandAccountQueueProperties(d.Get("queue_properties").([]interface{}))
-		if err != nil {
-			return fmt.Errorf("expanding `queue_properties` for %s: %+v", *id, err)
-		}
+			queueProperties, err := expandAccountQueueProperties(d.Get("queue_properties").([]interface{}))
+			if err != nil {
+				return fmt.Errorf("expanding `queue_properties` for %s: %+v", *id, err)
+			}
 
-		if err = queueClient.UpdateServiceProperties(ctx, *queueProperties); err != nil {
-			return fmt.Errorf("updating Queue Properties for %s: %+v", *id, err)
+			if err = queueClient.UpdateServiceProperties(ctx, *queueProperties); err != nil {
+				return fmt.Errorf("updating Queue Properties for %s: %+v", *id, err)
+			}
 		}
 	}
 
@@ -2084,28 +2086,30 @@ func resourceStorageAccountUpdate(d *pluginsdk.ResourceData, meta interface{}) e
 		}
 	}
 
-	if d.HasChange("static_website") {
-		if !supportLevel.supportStaticWebsite {
-			return fmt.Errorf("`static_website` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
-		}
+	if !features.FourPointOhBeta() {
+		if d.HasChange("static_website") {
+			if !supportLevel.supportStaticWebsite {
+				return fmt.Errorf("`static_website` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
+			}
 
-		account, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
-		if err != nil {
-			return fmt.Errorf("retrieving %s: %+v", *id, err)
-		}
-		if account == nil {
-			return fmt.Errorf("unable to locate %s", *id)
-		}
+			account, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
+			if err != nil {
+				return fmt.Errorf("retrieving %s: %+v", *id, err)
+			}
+			if account == nil {
+				return fmt.Errorf("unable to locate %s", *id)
+			}
 
-		accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
-		if err != nil {
-			return fmt.Errorf("building Data Plane client for %s: %+v", *id, err)
-		}
+			accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
+			if err != nil {
+				return fmt.Errorf("building Data Plane client for %s: %+v", *id, err)
+			}
 
-		staticWebsiteProps := expandAccountStaticWebsiteProperties(d.Get("static_website").([]interface{}))
+			staticWebsiteProps := expandAccountStaticWebsiteProperties(d.Get("static_website").([]interface{}))
 
-		if _, err = accountsClient.SetServiceProperties(ctx, id.StorageAccountName, staticWebsiteProps); err != nil {
-			return fmt.Errorf("updating `static_website` for %s: %+v", *id, err)
+			if _, err = accountsClient.SetServiceProperties(ctx, id.StorageAccountName, staticWebsiteProps); err != nil {
+				return fmt.Errorf("updating `static_website` for %s: %+v", *id, err)
+			}
 		}
 	}
 
