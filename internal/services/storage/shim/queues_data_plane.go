@@ -62,7 +62,7 @@ func (w DataPlaneStorageQueueWrapper) Get(ctx context.Context, queueName string)
 func (w DataPlaneStorageQueueWrapper) GetServiceProperties(ctx context.Context) (*queues.StorageServiceProperties, error) {
 	serviceProps, err := w.client.GetServiceProperties(ctx)
 	if err != nil {
-		if response.WasNotFound(serviceProps.HttpResponse) {
+		if response.WasNotFound(serviceProps.HttpResponse) || response.WasForbidden(serviceProps.HttpResponse) {
 			return nil, nil
 		}
 		return nil, err

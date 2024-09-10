@@ -38,7 +38,7 @@ func NewDataPlaneStaticWebsiteAvailabilityPoller(ctx context.Context, client *st
 func (d *DataPlaneStaticWebsiteAvailabilityPoller) Poll(ctx context.Context) (*pollers.PollResult, error) {
 	resp, err := d.client.GetServiceProperties(ctx, d.storageAccountId.StorageAccountName)
 	if err != nil {
-		if !response.WasNotFound(resp.HttpResponse) {
+		if !response.WasNotFound(resp.HttpResponse) && !response.WasForbidden(resp.HttpResponse) {
 			return nil, pollers.PollingFailedError{
 				Message: err.Error(),
 				HttpResponse: &client.Response{

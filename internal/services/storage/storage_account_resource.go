@@ -2257,7 +2257,9 @@ func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) err
 
 		staticWebsiteProps, err := accountsClient.GetServiceProperties(ctx, id.StorageAccountName)
 		if err != nil {
-			return fmt.Errorf("retrieving static website properties for %s: %+v", *id, err)
+			if !response.WasForbidden(staticWebsiteProps.HttpResponse) && !response.WasNotFound(staticWebsiteProps.HttpResponse) {
+				return fmt.Errorf("retrieving static website properties for %s: %+v", *id, err)
+			}
 		}
 
 		staticWebsiteProperties = flattenAccountStaticWebsiteProperties(staticWebsiteProps)
