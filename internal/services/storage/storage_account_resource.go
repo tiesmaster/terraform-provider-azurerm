@@ -753,6 +753,7 @@ func resourceStorageAccount() *pluginsdk.Resource {
 			"static_website": {
 				Type:     pluginsdk.TypeList,
 				Optional: true,
+				Computed: true,
 				MaxItems: 1,
 				Elem: &pluginsdk.Resource{
 					Schema: map[string]*pluginsdk.Schema{
@@ -1286,6 +1287,7 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 	tenantId := meta.(*clients.Client).Account.TenantId
 	subscriptionId := meta.(*clients.Client).Account.SubscriptionId
 	client := meta.(*clients.Client).Storage.ResourceManager.StorageAccounts
+	dataPlaneAvailable := meta.(*clients.Client).Features.Storage.DataPlaneAvailable
 	storageClient := meta.(*clients.Client).Storage
 	keyVaultClient := meta.(*clients.Client).KeyVault
 	ctx, cancel := timeouts.ForCreate(meta.(*clients.Client).StopContext, d)
@@ -1495,8 +1497,10 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 	}
 
 	supportLevel := availableFunctionalityForAccount(accountKind, accountTier, replicationType)
-	if err := waitForDataPlaneToBecomeAvailableForAccount(ctx, storageClient, dataPlaneAccount, supportLevel); err != nil {
-		return fmt.Errorf("waiting for the Data Plane for %s to become available: %+v", id, err)
+	if dataPlaneAvailable {
+		if err := waitForDataPlaneToBecomeAvailableForAccount(ctx, storageClient, dataPlaneAccount, supportLevel); err != nil {
+			return fmt.Errorf("waiting for the Data Plane for %s to become available: %+v", id, err)
+		}
 	}
 
 	if val, ok := d.GetOk("blob_properties"); ok {
@@ -1557,6 +1561,10 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 			return fmt.Errorf("`queue_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
 		}
 
+		if !dataPlaneAvailable {
+			return fmt.Errorf("`queue_properties` blocks are not supported on this resource when the Public Data Plane is not accessible. If using queues with private endpoints please use the `azurerm_storage_account_queue_properties` resource in conjunction with `depends_on` to ensure the queue configuration is applied after the Private Endpoint is configured")
+		}
+
 		queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *dataPlaneAccount, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
 		if err != nil {
 			return fmt.Errorf("building Queues Client: %s", err)
@@ -1600,6 +1608,10 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 	if val, ok := d.GetOk("static_website"); ok {
 		if !supportLevel.supportStaticWebsite {
 			return fmt.Errorf("`static_website` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
+		}
+
+		if !dataPlaneAvailable {
+			return fmt.Errorf("`static_website` blocks are not supported on this resource when the Public Data Plane is not accessible. If using queues with private endpoints please use the `azurerm_storage_account_static_website` resource in conjunction with `depends_on` to ensure the static website configuration is applied after the Private Endpoint is configured")
 		}
 
 		accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *dataPlaneAccount, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
@@ -1984,6 +1996,7 @@ func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) err
 	storageClient := meta.(*clients.Client).Storage
 	client := storageClient.ResourceManager.StorageAccounts
 	env := meta.(*clients.Client).Account.Environment
+	dataPlaneAvailable := meta.(*clients.Client).Features.Storage.DataPlaneAvailable
 	ctx, cancel := timeouts.ForRead(meta.(*clients.Client).StopContext, d)
 	defer cancel()
 
@@ -2217,7 +2230,7 @@ func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) err
 	}
 
 	queueProperties := make([]interface{}, 0)
-	if supportLevel.supportQueue {
+	if supportLevel.supportQueue && dataPlaneAvailable {
 		queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
 		if err != nil {
 			return fmt.Errorf("building Queues Client: %s", err)
@@ -2249,7 +2262,7 @@ func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) err
 	}
 
 	staticWebsiteProperties := make([]interface{}, 0)
-	if supportLevel.supportStaticWebsite {
+	if supportLevel.supportStaticWebsite && dataPlaneAvailable {
 		accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
 		if err != nil {
 			return fmt.Errorf("building Accounts Data Plane Client: %s", err)
