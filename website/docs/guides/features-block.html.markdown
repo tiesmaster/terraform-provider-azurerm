@@ -123,11 +123,17 @@ The `features` block supports the following:
 
 * `managed_disk` - (Optional) A `managed_disk` block as defined below.
 
+* `postgresql_flexible_server`- (Optional) A `postgresql_flexible_server` block as defined below.
+
 * `recovery_service` - (Optional) A `recovery_service` block as defined below.
 
 * `resource_group` - (Optional) A `resource_group` block as defined below.
 
-* `recovery_services_vault` - (Optional) A `recovery_services_vault` block as defined below.
+* `recovery_services_vaults` - (Optional) A `recovery_services_vault` block as defined below.
+
+* `storage` - (Optional) A `storage` block as defined below.
+
+* `subscription` - (Optional) A `subscription` block as defined below.
 
 * `template_deployment` - (Optional) A `template_deployment` block as defined below.
 
@@ -240,6 +246,12 @@ The `resource_group` block supports the following:
 The `recovery_services_vault` block supports the following:
 
 * `recover_soft_deleted_backup_protected_vm` - (Optional) Should the `azurerm_backup_protected_vm` resource recover a Soft-Deleted protected VM? Defaults to `false`.
+
+---
+
+The `storage` block supports the following:
+
+* `data_plane_available` - (Optional) Is the Storage Data Plane API available over Public Internet. Some resource properties are only available via Data Plane and not Resource Manager. If the agent running Terraform is blocked from accessing the Data Plane on public IP addressing, such as by a corporate firewall, set this to `false`. Defaults to `true`.
 
 ---
 
