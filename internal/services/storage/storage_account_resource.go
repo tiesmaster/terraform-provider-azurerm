@@ -753,6 +753,7 @@ func resourceStorageAccount() *pluginsdk.Resource {
 			"static_website": {
 				Type:     pluginsdk.TypeList,
 				Optional: true,
+				Computed: true,
 				MaxItems: 1,
 				Elem: &pluginsdk.Resource{
 					Schema: map[string]*pluginsdk.Schema{
