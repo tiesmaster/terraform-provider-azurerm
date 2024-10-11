@@ -28,7 +28,7 @@ import (
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/features"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/locks"
-	keyVaultClient "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/client"
+	keyVaultsClient "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/client"
 	keyVaultParse "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/parse"
 	keyVaultValidate "github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault/validate"
 	managedHsmParse "github.com/hashicorp/terraform-provider-azurerm/internal/services/managedhsm/parse"
@@ -1247,6 +1247,15 @@ func resourceStorageAccount() *pluginsdk.Resource {
 					}
 				}
 
+				if !v.(*clients.Client).Features.Storage.DataPlaneAvailable {
+					if _, ok := d.GetOk("queue_properties"); ok {
+						return fmt.Errorf("cannot configure 'queue_properties' when the Provider Feature 'data_plane_available' is set to 'false'")
+					}
+					if _, ok := d.GetOk("static_website"); ok {
+						return fmt.Errorf("cannot configure 'static_website' when the Provider Feature 'data_plane_available' is set to 'false'")
+					}
+				}
+
 				return nil
 			}),
 			pluginsdk.ForceNewIfChange("account_replication_type", func(ctx context.Context, old, new, meta interface{}) bool {
@@ -1289,6 +1298,7 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 	client := meta.(*clients.Client).Storage.ResourceManager.StorageAccounts
 	storageClient := meta.(*clients.Client).Storage
 	keyVaultClient := meta.(*clients.Client).KeyVault
+	dataPlaneAvailable := meta.(*clients.Client).Features.Storage.DataPlaneAvailable
 	ctx, cancel := timeouts.ForCreate(meta.(*clients.Client).StopContext, d)
 	defer cancel()
 
@@ -1487,19 +1497,62 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 		return fmt.Errorf("populating cache for %s: %+v", id, err)
 	}
 
-	dataPlaneAccount, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
-	if err != nil {
-		return fmt.Errorf("retrieving %s: %+v", id, err)
-	}
-	if dataPlaneAccount == nil {
-		return fmt.Errorf("unable to locate %q", id)
-	}
-
 	supportLevel := availableFunctionalityForAccount(accountKind, accountTier, replicationType)
-	if err := waitForDataPlaneToBecomeAvailableForAccount(ctx, storageClient, dataPlaneAccount, supportLevel); err != nil {
-		return fmt.Errorf("waiting for the Data Plane for %s to become available: %+v", id, err)
+	// Start of Data Plane access
+	if dataPlaneAvailable {
+
+		dataPlaneAccount, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
+		if err != nil {
+			return fmt.Errorf("retrieving %s: %+v", id, err)
+		}
+		if dataPlaneAccount == nil {
+			return fmt.Errorf("unable to locate %q", id)
+		}
+
+		if err := waitForDataPlaneToBecomeAvailableForAccount(ctx, storageClient, dataPlaneAccount, supportLevel); err != nil {
+			return fmt.Errorf("waiting for the Data Plane for %s to become available: %+v", id, err)
+		}
+
+		// Data Plane block
+		if val, ok := d.GetOk("queue_properties"); ok {
+			if !supportLevel.supportQueue {
+				return fmt.Errorf("`queue_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
+			}
+
+			queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *dataPlaneAccount, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
+			if err != nil {
+				return fmt.Errorf("building Queues Client: %s", err)
+			}
+
+			queueProperties, err := expandAccountQueueProperties(val.([]interface{}))
+			if err != nil {
+				return fmt.Errorf("expanding `queue_properties`: %+v", err)
+			}
+
+			if err = queueClient.UpdateServiceProperties(ctx, *queueProperties); err != nil {
+				return fmt.Errorf("updating Queue Properties: %+v", err)
+			}
+		}
+
+		if val, ok := d.GetOk("static_website"); ok {
+			if !supportLevel.supportStaticWebsite {
+				return fmt.Errorf("`static_website` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
+			}
+
+			accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *dataPlaneAccount, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
+			if err != nil {
+				return fmt.Errorf("building Accounts Data Plane Client: %s", err)
+			}
+
+			staticWebsiteProps := expandAccountStaticWebsiteProperties(val.([]interface{}))
+
+			if _, err = accountsClient.SetServiceProperties(ctx, id.StorageAccountName, staticWebsiteProps); err != nil {
+				return fmt.Errorf("updating `static_website`: %+v", err)
+			}
+		}
 	}
 
+	// Resource Manager only after here
 	if val, ok := d.GetOk("blob_properties"); ok {
 		if !supportLevel.supportBlob {
 			return fmt.Errorf("`blob_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
@@ -1553,26 +1606,6 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 		}
 	}
 
-	if val, ok := d.GetOk("queue_properties"); ok {
-		if !supportLevel.supportQueue {
-			return fmt.Errorf("`queue_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
-		}
-
-		queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *dataPlaneAccount, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
-		if err != nil {
-			return fmt.Errorf("building Queues Client: %s", err)
-		}
-
-		queueProperties, err := expandAccountQueueProperties(val.([]interface{}))
-		if err != nil {
-			return fmt.Errorf("expanding `queue_properties`: %+v", err)
-		}
-
-		if err = queueClient.UpdateServiceProperties(ctx, *queueProperties); err != nil {
-			return fmt.Errorf("updating Queue Properties: %+v", err)
-		}
-	}
-
 	if val, ok := d.GetOk("share_properties"); ok {
 		if !supportLevel.supportShare {
 			return fmt.Errorf("`share_properties` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
@@ -1598,26 +1631,10 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 		}
 	}
 
-	if val, ok := d.GetOk("static_website"); ok {
-		if !supportLevel.supportStaticWebsite {
-			return fmt.Errorf("`static_website` aren't supported for account kind %q in sku tier %q", accountKind, accountTier)
-		}
-
-		accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *dataPlaneAccount, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
-		if err != nil {
-			return fmt.Errorf("building Accounts Data Plane Client: %s", err)
-		}
-
-		staticWebsiteProps := expandAccountStaticWebsiteProperties(val.([]interface{}))
-
-		if _, err = accountsClient.SetServiceProperties(ctx, id.StorageAccountName, staticWebsiteProps); err != nil {
-			return fmt.Errorf("updating `static_website`: %+v", err)
-		}
-	}
-
 	// Replacing the `return resourceStorageAccountRead(d, meta)` here with setting the configuration values directly to
-	// allow us to skip a one read operation since this pattern is a code convenience deduplication choice, and not
-	// strictly necessary, which saves some time on creation given we may have multiple data plane timeouts to consider.
+	// state allow us to skip a one read operation since this pattern is a code convenience/deduplication choice, and
+	// not strictly necessary, which saves some time on creation given we may have multiple data plane timeouts to
+	// consider.
 
 	d.Set("name", id.StorageAccountName)
 	d.Set("resource_group_name", id.ResourceGroupName)
@@ -2025,6 +2042,7 @@ func resourceStorageAccountUpdate(d *pluginsdk.ResourceData, meta interface{}) e
 func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) error {
 	storageClient := meta.(*clients.Client).Storage
 	client := storageClient.ResourceManager.StorageAccounts
+	dataPlaneAvailable := meta.(*clients.Client).Features.Storage.DataPlaneAvailable
 	env := meta.(*clients.Client).Account.Environment
 	ctx, cancel := timeouts.ForRead(meta.(*clients.Client).StopContext, d)
 	defer cancel()
@@ -2258,29 +2276,6 @@ func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) err
 		return fmt.Errorf("setting `blob_properties` for %s: %+v", *id, err)
 	}
 
-	queueProperties := make([]interface{}, 0)
-	if supportLevel.supportQueue {
-		queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
-		if err != nil {
-			return fmt.Errorf("building Queues Client: %s", err)
-		}
-
-		queueProps, err := queueClient.GetServiceProperties(ctx)
-		if err != nil {
-			// Queue properties is a data plan only service, so we tolerate connection errors here in case of firewalls
-			// and other connectivity issues that are not guaranteed.
-			if !connectionError(err) {
-				return fmt.Errorf("retrieving queue properties for %s: %+v", *id, err)
-			}
-		}
-
-		queueProperties = flattenAccountQueueProperties(queueProps)
-	}
-
-	if err := d.Set("queue_properties", queueProperties); err != nil {
-		return fmt.Errorf("setting `queue_properties`: %+v", err)
-	}
-
 	shareProperties := make([]interface{}, 0)
 	if supportLevel.supportShare {
 		shareProps, err := storageClient.ResourceManager.FileService.GetServiceProperties(ctx, *id)
@@ -2294,24 +2289,48 @@ func resourceStorageAccountRead(d *pluginsdk.ResourceData, meta interface{}) err
 		return fmt.Errorf("setting `share_properties` for %s: %+v", *id, err)
 	}
 
-	staticWebsiteProperties := make([]interface{}, 0)
-	if supportLevel.supportStaticWebsite {
-		accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
-		if err != nil {
-			return fmt.Errorf("building Accounts Data Plane Client: %s", err)
-		}
-
-		staticWebsiteProps, err := accountsClient.GetServiceProperties(ctx, id.StorageAccountName)
-		if err != nil {
-			if !connectionError(err) {
-				return fmt.Errorf("retrieving static website properties for %s: %+v", *id, err)
+	if dataPlaneAvailable {
+		queueProperties := make([]interface{}, 0)
+		if supportLevel.supportQueue {
+			queueClient, err := storageClient.QueuesDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
+			if err != nil {
+				return fmt.Errorf("building Queues Client: %s", err)
 			}
+
+			queueProps, err := queueClient.GetServiceProperties(ctx)
+			if err != nil {
+				// Queue properties is a data plan only service, so we tolerate connection errors here in case of firewalls
+				// and other connectivity issues that are not guaranteed.
+				if !connectionError(err) {
+					return fmt.Errorf("retrieving queue properties for %s: %+v", *id, err)
+				}
+			}
+
+			queueProperties = flattenAccountQueueProperties(queueProps)
+		}
+		if err := d.Set("queue_properties", queueProperties); err != nil {
+			return fmt.Errorf("setting `queue_properties`: %+v", err)
 		}
 
-		staticWebsiteProperties = flattenAccountStaticWebsiteProperties(staticWebsiteProps)
-	}
-	if err := d.Set("static_website", staticWebsiteProperties); err != nil {
-		return fmt.Errorf("setting `static_website`: %+v", err)
+		staticWebsiteProperties := make([]interface{}, 0)
+		if supportLevel.supportStaticWebsite {
+			accountsClient, err := storageClient.AccountsDataPlaneClient(ctx, *account, storageClient.DataPlaneOperationSupportingAnyAuthMethod())
+			if err != nil {
+				return fmt.Errorf("building Accounts Data Plane Client: %s", err)
+			}
+
+			staticWebsiteProps, err := accountsClient.GetServiceProperties(ctx, id.StorageAccountName)
+			if err != nil {
+				if !connectionError(err) {
+					return fmt.Errorf("retrieving static website properties for %s: %+v", *id, err)
+				}
+			}
+
+			staticWebsiteProperties = flattenAccountStaticWebsiteProperties(staticWebsiteProps)
+		}
+		if err := d.Set("static_website", staticWebsiteProperties); err != nil {
+			return fmt.Errorf("setting `static_website`: %+v", err)
+		}
 	}
 
 	return nil
@@ -2397,7 +2416,7 @@ func flattenAccountCustomDomain(input *storageaccounts.CustomDomain) []interface
 	return output
 }
 
-func expandAccountCustomerManagedKey(ctx context.Context, keyVaultClient *keyVaultClient.Client, subscriptionId string, input []interface{}, accountTier storageaccounts.SkuTier, accountKind storageaccounts.Kind, expandedIdentity identity.LegacySystemAndUserAssignedMap, queueEncryptionKeyType, tableEncryptionKeyType storageaccounts.KeyType) (*storageaccounts.Encryption, error) {
+func expandAccountCustomerManagedKey(ctx context.Context, keyVaultClient *keyVaultsClient.Client, subscriptionId string, input []interface{}, accountTier storageaccounts.SkuTier, accountKind storageaccounts.Kind, expandedIdentity identity.LegacySystemAndUserAssignedMap, queueEncryptionKeyType, tableEncryptionKeyType storageaccounts.KeyType) (*storageaccounts.Encryption, error) {
 	if accountKind != storageaccounts.KindStorageVTwo {
 		if queueEncryptionKeyType == storageaccounts.KeyTypeAccount {
 			return nil, fmt.Errorf("`queue_encryption_key_type = %q` can only be used with account kind `%q`", string(storageaccounts.KeyTypeAccount), string(storageaccounts.KindStorageVTwo))
