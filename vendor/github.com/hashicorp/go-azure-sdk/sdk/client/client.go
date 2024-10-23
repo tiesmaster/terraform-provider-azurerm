@@ -754,7 +754,6 @@ func containsStatusCode(expected []int, actual int) bool {
 
 // extendedRetryPolicy extends the defaultRetryPolicy implementation in go-retryablehhtp with
 // additional error conditions that should not be retried indefinitely
-// `tcpDialTimeoutRe` - covers the
 func extendedRetryPolicy(resp *http.Response, err error) (bool, error) {
 	// A regular expression to match the error returned by net/http when the
 	// configured number of redirects is exhausted. This error isn't typed
@@ -778,7 +777,7 @@ func extendedRetryPolicy(resp *http.Response, err error) (bool, error) {
 
 	// A regular expression to catch dial timeouts in the underlying TCP session
 	// connection
-	tcpDialTimeoutRe := regexp.MustCompile(`dial tcp .*: i/o timeout`)
+	tcpDialTCPRe := regexp.MustCompile(`dial tcp`)
 
 	// A regular expression to match complete packet loss - see comment below on packet-loss scenarios
 	// completePacketLossRe := regexp.MustCompile(`EOF$`)
@@ -806,7 +805,7 @@ func extendedRetryPolicy(resp *http.Response, err error) (bool, error) {
 				return false, v
 			}
 
-			if tcpDialTimeoutRe.MatchString(v.Error()) {
+			if tcpDialTCPRe.MatchString(v.Error()) {
 				return false, v
 			}
 

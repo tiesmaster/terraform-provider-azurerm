@@ -95,5 +95,5 @@ require (
 
 go 1.21
 
-// TODO - This must not ship in a release and is to facilitte testing ONLY
-replace github.com/hashicorp/go-azure-sdk/sdk => github.com/hashicorp/go-azure-sdk/sdk v0.20240927.1005215-0.20241001133652-05bb6f160afa
+// TODO - This must not ship in a release and is to facilitate testing ONLY
+replace github.com/hashicorp/go-azure-sdk/sdk => github.com/hashicorp/go-azure-sdk/sdk v0.20241021.1074255-0.20241023114859-bd2dddd9ae2a
