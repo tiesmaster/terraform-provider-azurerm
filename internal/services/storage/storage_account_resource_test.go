@@ -1808,7 +1808,7 @@ func TestAccStorageAccount_noDataPlaneQueueShouldError(t *testing.T) {
 	data.ResourceTest(t, r, []acceptance.TestStep{
 		{
 			Config:      r.noDataPlaneExpectQueueError(data),
-			ExpectError: regexp.MustCompile("cannot configure 'queue_properties' when the Provider Feature 'data_plane_available' is set to false"),
+			ExpectError: regexp.MustCompile("cannot configure 'queue_properties' when the Provider Feature 'data_plane_available' is set to 'false'"),
 		},
 	})
 }
@@ -1820,7 +1820,7 @@ func TestAccStorageAccount_noDataPlaneWebsiteShouldError(t *testing.T) {
 	data.ResourceTest(t, r, []acceptance.TestStep{
 		{
 			Config:      r.noDataPlaneExpectWebsiteError(data),
-			ExpectError: regexp.MustCompile("cannot configure 'static_website' when the Provider Feature 'data_plane_available' is set to false"),
+			ExpectError: regexp.MustCompile("cannot configure 'static_website' when the Provider Feature 'data_plane_available' is set to 'false'"),
 		},
 	})
 }
