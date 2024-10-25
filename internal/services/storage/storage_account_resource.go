@@ -1500,7 +1500,6 @@ func resourceStorageAccountCreate(d *pluginsdk.ResourceData, meta interface{}) e
 	supportLevel := availableFunctionalityForAccount(accountKind, accountTier, replicationType)
 	// Start of Data Plane access
 	if dataPlaneAvailable {
-
 		dataPlaneAccount, err := storageClient.FindAccount(ctx, id.SubscriptionId, id.StorageAccountName)
 		if err != nil {
 			return fmt.Errorf("retrieving %s: %+v", id, err)
@@ -2352,6 +2351,10 @@ func resourceStorageAccountDelete(d *pluginsdk.ResourceData, meta interface{}) e
 
 	existing, err := client.GetProperties(ctx, *id, storageaccounts.DefaultGetPropertiesOperationOptions())
 	if err != nil {
+		if response.WasNotFound(existing.HttpResponse) {
+			return nil
+		}
+
 		return fmt.Errorf("retrieving %s: %+v", *id, err)
 	}
 
