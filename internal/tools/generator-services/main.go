@@ -41,6 +41,7 @@ func main() {
 	generators := []generator{
 		githubLabelsGenerator{},
 		githubIssueLabelsGenerator{},
+		githubPRLabelsGenerator{},
 		teamCityServicesListGenerator{},
 		websiteCategoriesGenerator{},
 	}
@@ -416,6 +417,29 @@ func (githubIssueLabelsGenerator) run(outputFileName string, _ map[string]struct
 			output += fmt.Sprintf("\n%s", strings.Join(out, "\n"))
 		}
 	}
+
+	return writeToFile(outputFileName, output)
+}
+
+const githubPRLabelsTemplate = `# NOTE: this file is generated via 'make generate'
+bug:
+  - '- \[ ?X ?\] Bug Fix'
+
+enhancement:
+  - '- \[ ?X ?\] Enhancement'
+
+breaking-change:
+  - '- \[ ?X ?\] Breaking Change'
+`
+type githubPRLabelsGenerator struct{}
+
+func (g githubPRLabelsGenerator) outputPath(rootDirectory string) string {
+	return fmt.Sprintf("%s/.github/labeler-pull-request-triage-type.yml", rootDirectory)
+}
+
+func (githubPRLabelsGenerator) run(outputFileName string, _ map[string]struct{}) error {
+
+	output := strings.TrimSpace(githubPRLabelsTemplate)
 
 	return writeToFile(outputFileName, output)
 }
