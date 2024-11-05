@@ -5,6 +5,8 @@ package framework
 
 import (
 	"context"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/services/keyvault"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -28,6 +30,8 @@ type azureRmFrameworkProvider struct {
 var _ provider.Provider = &azureRmFrameworkProvider{}
 
 var _ provider.ProviderWithFunctions = &azureRmFrameworkProvider{}
+
+var _ provider.ProviderWithEphemeralResources = &azureRmFrameworkProvider{}
 
 func (p *azureRmFrameworkProvider) Functions(_ context.Context) []func() function.Function {
 	return []func() function.Function{
@@ -490,4 +494,14 @@ func (p *azureRmFrameworkProvider) DataSources(_ context.Context) []func() datas
 func (p *azureRmFrameworkProvider) Resources(_ context.Context) []func() resource.Resource {
 	// We do not currently support any Native framework Resources
 	return nil
+}
+
+func (p *azureRmFrameworkProvider) EphemeralResources(_ context.Context) []func() ephemeral.EphemeralResource {
+	return []func() ephemeral.EphemeralResource{
+		NewEphemeralResource,
+	}
+}
+
+func NewEphemeralResource() ephemeral.EphemeralResource {
+	return keyvault.KeyVaultSecretEphemeralResource{}
 }
