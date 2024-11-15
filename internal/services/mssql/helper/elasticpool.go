@@ -403,7 +403,7 @@ func buildErrorString(stub string, m map[int]float64) string {
 
 func doDTUSKUValidation(s sku) error {
 	if s.MaxAllowedGB == 0 {
-		return errors.New(getDTUCapacityErrorMsg(s))
+		return fmt.Errorf("Unable to find a valid DTU 'max_size_gb' value for '%s' family '%s' service tier '%s' with a 'capacity' of %d", s.Name, s.Family, s.Tier, s.Capacity)
 	}
 
 	if strings.EqualFold(s.Name, "BasicPool") {
@@ -441,7 +441,7 @@ func doDTUSKUValidation(s sku) error {
 
 func doVCoreSKUValidation(s sku) error {
 	if s.MaxAllowedGB == 0 {
-		return errors.New(getVCoreCapacityErrorMsg(s))
+		return fmt.Errorf("Unable to find a valid VCore 'max_size_gb' value for '%s' family '%s' service tier '%s' with a 'capacity' of %d", s.Name, s.Family, s.Tier, s.Capacity)
 	}
 
 	if s.MaxSizeGb > s.MaxAllowedGB {
