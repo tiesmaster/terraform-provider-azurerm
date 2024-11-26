@@ -98,3 +98,5 @@ require (
 go 1.22.0
 
 toolchain go1.22.7
+
+replace github.com/hashicorp/go-azure-sdk/sdk => github.com/hashicorp/go-azure-sdk/sdk v0.20241118.1115604-0.20241125150925-98437fc1f74e
